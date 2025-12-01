@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全通路廣告活動管理 (Campaign Manager)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .fade-in { animation: fadeIn 0.2s ease-in-out; }
+        .slide-up { animation: slideUp 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .custom-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Mobile Preview Scrollbar */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Custom Checkbox Toggle Style */
+        .toggle-checkbox:checked + div { background-color: #4f46e5; color: white; border-color: #4f46e5; }
+        .toggle-checkbox + div { transition: all 0.2s; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- ICONS ---
+        const Icon = ({ path, className = "w-5 h-5" }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{path}</svg>
+        );
+        const Icons = {
+            Plus: <path d="M12 5v14M5 12h14" />,
+            Edit: <g><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></g>,
+            Trash: <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />,
+            Image: <g><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></g>,
+            Check: <polyline points="20 6 9 17 4 12" />,
+            Calendar: <g><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></g>,
+            Link: <g><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></g>,
+            Info: <g><circle cx="12" cy="12" r="10" /><path d="M12 16v-4"/><path d="M12 8h.01"/></g>,
+            Search: <g><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></g>,
+            Refresh: <g><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></g>,
+            Eye: <g><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></g>,
+            Smartphone: <g><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></g>,
+            Home: <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />, 
+            CreditCard: <rect width="20" height="14" x="2" y="5" rx="2" />,
+            Slash: <g><circle cx="12" cy="12" r="10"/><line x1="4.93" x2="19.07" y1="4.93" y2="19.07"/></g>,
+            Gamepad: <g><line x1="6" x2="10" y1="12" y2="12"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="15" x2="15.01" y1="13" y2="13"/><line x1="18" x2="18.01" y1="11" y2="11"/><rect width="20" height="12" x="2" y="6" rx="2"/></g>
+        };
+
+        // --- MOCK DATA ---
+        const INITIAL_CAMPAIGNS = [
+            { 
+                id: 1, 
+                name: '2025 新春大放送', 
+                start: '2025-01-20 00:00', 
+                end: '2025-02-10 23:59', 
+                isEnabled: true,
+                weight: 1,
+                placements: {
+                    promotion: { active: true, linkType: 'url', linkValue: 'https://example.com' },
+                    lobby: { active: true, linkType: 'game', linkValue: '1001' },
+                    menu: { active: true, linkType: 'none', linkValue: '' },
+                    deposit: { active: false }
+                },
+                created: new Date('2025-11-20T10:00:00').toISOString()
+            },
+            { 
+                id: 2, 
+                name: '新遊戲上線：企鵝大逃脫', 
+                start: '2025-02-01 10:00', 
+                end: '2025-02-28 23:59', 
+                isEnabled: true,
+                weight: 2,
+                placements: {
+                    promotion: { active: true, linkType: 'game', linkValue: '2005' },
+                    lobby: { active: true, linkType: 'game', linkValue: '2005' },
+                    menu: { active: false },
+                    deposit: { active: false }
+                },
+                created: new Date('2025-11-22T14:30:00').toISOString()
+            },
+            { 
+                id: 3, 
+                name: 'VIP 專屬儲值回饋', 
+                start: '2025-03-01 00:00', 
+                end: '2025-03-15 23:59', 
+                isEnabled: false,
+                weight: 99,
+                placements: {
+                    promotion: { active: false },
+                    lobby: { active: false },
+                    menu: { active: true, linkType: 'url', linkValue: '/vip' },
+                    deposit: { active: true, linkType: 'none' } 
+                },
+                created: new Date('2025-11-25T18:00:00').toISOString()
+            }
+        ];
+
+        // --- MOCK GAME DB ---
+        const MOCK_GAME_DB = {
+            '1001': '企鵝大逃脫 (Penguin Escape)',
+            '2005': '幸運轉盤 (Lucky Wheel)',
+            '8888': '財神到 (God of Wealth)',
+            '5566': '百家樂 (Baccarat)'
+        };
+
+        // --- UI COMPONENTS ---
+
+        const Toast = ({ message, type = 'success', onClose }) => {
+            useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
+            return (
+                <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full shadow-xl flex items-center gap-3 slide-up z-[70] ${type === 'success' ? 'bg-slate-800 text-white' : 'bg-red-500 text-white'}`}>
+                    <span className="font-bold">{type === 'success' ? '✓' : '!'}</span> {message}
+                </div>
+            );
+        };
+
+        const ToggleSwitch = ({ isChecked, onChange }) => (
+            <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" className="sr-only peer" checked={isChecked} onChange={onChange} />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-500"></div>
+            </label>
+        );
+
+        // --- FILTER BAR COMPONENT ---
+        const PLACEMENTS = ['promotion', 'lobby', 'menu', 'deposit'];
+        const FilterBar = ({ filters, onFilterChange, onReset, onSearch }) => {
+
+            const handlePlacementChange = (p) => {
+                const newPlacements = filters.placements.includes(p)
+                    ? filters.placements.filter(item => item !== p)
+                    : [...filters.placements, p];
+                onFilterChange('placements', newPlacements);
+            };
+
+            return (
+                <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                        
+                        {/* 活動期間 (Date Range) */}
+                        <div className="md:col-span-4">
+                            <label className="block text-xs font-bold text-slate-500 mb-2">活動期間</label>
+                            <div className="flex items-center gap-2">
+                                <div className="relative flex-1">
+                                    <input type="date" className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-600" value={filters.startDate} onChange={(e) => onFilterChange('startDate', e.target.value)} />
+                                    <div className="absolute left-3 top-2.5 text-slate-400 pointer-events-none"><Icon path={Icons.Calendar} className="w-4 h-4"/></div>
+                                </div>
+                                <span className="text-slate-400">~</span>
+                                <div className="relative flex-1">
+                                    <input type="date" className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-600" value={filters.endDate} onChange={(e) => onFilterChange('endDate', e.target.value)} />
+                                    <div className="absolute left-3 top-2.5 text-slate-400 pointer-events-none"><Icon path={Icons.Calendar} className="w-4 h-4"/></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 版位分類 (Placement Checkboxes) */}
+                        <div className="md:col-span-4">
+                            <label className="block text-xs font-bold text-slate-500 mb-2">版位分類 (複選)</label>
+                            <div className="flex flex-wrap gap-2">
+                                {/* Added 'ALL' option logic */}
+                                <label key="all" className="cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        className="hidden toggle-checkbox" 
+                                        checked={filters.placements.length === PLACEMENTS.length} 
+                                        onChange={() => onFilterChange('placements', filters.placements.length === PLACEMENTS.length ? [] : PLACEMENTS)} 
+                                    />
+                                    <div className="px-3 py-1.5 border border-slate-300 rounded-md text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors select-none">
+                                        全部 (ALL)
+                                    </div>
+                                </label>
+                                {PLACEMENTS.map(p => (
+                                    <label key={p} className="cursor-pointer">
+                                        <input 
+                                            type="checkbox" 
+                                            className="hidden toggle-checkbox" 
+                                            checked={filters.placements.includes(p)} 
+                                            onChange={() => handlePlacementChange(p)} 
+                                        />
+                                        <div className="px-3 py-1.5 border border-slate-300 rounded-md text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors select-none uppercase">
+                                            {p}
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 活動狀態 (Status Dropdown) */}
+                        <div className="md:col-span-2">
+                            <label className="block text-xs font-bold text-slate-500 mb-2">活動狀態</label>
+                            <select className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none text-slate-600 bg-white" value={filters.status} onChange={(e) => onFilterChange('status', e.target.value)}>
+                                <option value="all">全部狀態</option>
+                                <option value="active">啟用中</option>
+                                <option value="inactive">已停用</option>
+                            </select>
+                        </div>
+                        
+                        {/* 操作按鈕 (Actions) */}
+                        <div className="md:col-span-2 flex justify-end gap-2">
+                            <button onClick={onReset} className="px-4 py-2 border border-slate-300 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 flex items-center gap-2 bg-white"><Icon path={Icons.Refresh} className="w-4 h-4"/> 重置</button>
+                            <button onClick={onSearch} className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm transition-colors"><Icon path={Icons.Search} className="w-4 h-4"/> 查詢</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- PREVIEW MODAL COMPONENT ---
+        const PreviewModal = ({ isOpen, onClose, campaigns }) => {
+            const [previewDate, setPreviewDate] = useState(new Date().toISOString().slice(0, 16));
+            const [activePreviewTab, setActivePreviewTab] = useState('lobby'); 
+            
+            if (!isOpen) return null;
+
+            // --- SIMULATION LOGIC ---
+            const activeCampaigns = campaigns.filter(c => {
+                if (!c.isEnabled) return false;
+                const now = new Date(previewDate);
+                const start = new Date(c.start);
+                const end = new Date(c.end);
+                return now >= start && now <= end;
+            }).sort((a, b) => {
+                if (a.weight !== b.weight) return a.weight - b.weight; 
+                if (new Date(a.start).getTime() !== new Date(b.start).getTime()) return new Date(b.start) - new Date(a.start);
+                return new Date(b.created) - new Date(a.created);
+            });
+
+            const getPlacements = (key, isMutex = false) => {
+                const list = activeCampaigns.filter(c => c.placements[key]?.active);
+                if (isMutex) return list.slice(0, 1);
+                return list;
+            };
+
+            const promoList = getPlacements('promotion');
+            const lobbyList = getPlacements('lobby'); 
+            const menuList = getPlacements('menu', true); 
+            const depositList = getPlacements('deposit', true); 
+
+            const previewTabs = [
+                { id: 'lobby', label: 'Lobby 大廳', icon: Icons.Home },
+                { id: 'promotion', label: 'Promotion 列表', icon: Icons.Calendar },
+                { id: 'menu', label: 'Menu 選單', icon: Icons.Menu },
+                { id: 'deposit', label: 'Deposit 儲值', icon: Icons.CreditCard }
+            ];
+
+            const DebugOverlay = ({ index, name, weight }) => (
+                <div className="absolute top-0 left-0 bg-black/80 text-white text-[10px] px-2 py-1 rounded-br-lg z-20 backdrop-blur-md pointer-events-none border-b border-r border-white/10 shadow-sm font-mono">
+                    <span className="text-yellow-400 font-bold mr-1">#{index + 1}</span>
+                    <span className="text-cyan-300 mr-1">Wt:{weight}</span>
+                    <span className="opacity-90 truncate max-w-[100px] inline-block align-bottom">{name}</span>
+                </div>
+            );
+
+            return (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[80] flex flex-col fade-in overflow-hidden text-slate-200">
+                    {/* Header */}
+                    <div className="bg-slate-900 border-b border-slate-800 p-4 flex justify-between items-center shrink-0">
+                        <div className="flex items-center gap-4">
+                            <h2 className="text-lg font-bold flex items-center gap-2"><Icon path={Icons.Smartphone} className="w-5 h-5"/> 前台模擬預覽</h2>
+                            <div className="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                                <span className="text-xs text-slate-400 uppercase font-bold">模擬時間</span>
+                                <input 
+                                    type="datetime-local" 
+                                    value={previewDate}
+                                    onChange={(e) => setPreviewDate(e.target.value)}
+                                    className="bg-transparent text-sm font-mono focus:outline-none text-white"
+                                />
+                            </div>
+                        </div>
+                        <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"><span className="text-2xl">&times;</span></button>
+                    </div>
+
+                    <div className="flex flex-1 overflow-hidden">
+                        {/* Left Sidebar */}
+                        <div className="w-64 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-2 shrink-0">
+                            <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-2">選擇預覽版面</div>
+                            {previewTabs.map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActivePreviewTab(tab.id)}
+                                    className={`w-full flex items-center gap-3 p-3 rounded-lg transition-all text-sm font-medium ${activePreviewTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}
+                                >
+                                    <Icon path={tab.icon} className="w-4 h-4" />
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Right Content Area */}
+                        <div className="flex-1 overflow-auto p-8 flex justify-center items-center bg-slate-950 relative">
+                            
+                            <div className="w-[360px] h-[720px] bg-white rounded-[40px] border-[12px] border-slate-800 shadow-2xl flex flex-col shrink-0 overflow-hidden relative">
+                                <div className="h-7 bg-slate-100 flex justify-between px-5 items-center text-[10px] text-slate-500 font-bold select-none">
+                                    <span>9:41</span>
+                                    <div className="flex gap-1"><div className="w-3 h-3 bg-slate-300 rounded-full"></div><div className="w-3 h-3 bg-slate-300 rounded-full"></div></div>
+                                </div>
+
+                                {/* Dynamic View Rendering */}
+                                {activePreviewTab === 'lobby' && (
+                                    <div className="flex flex-col h-full bg-slate-50">
+                                        <div className="h-14 bg-white flex items-center justify-between px-4 border-b border-slate-100 shadow-sm z-10">
+                                            <div className="font-bold text-indigo-600 text-lg">LOGO</div>
+                                            <div className="bg-slate-100 px-2 py-1 rounded text-xs font-mono">$1,024.50</div>
+                                        </div>
+                                        <div className="h-48 bg-slate-200 relative group overflow-hidden shrink-0">
+                                            {lobbyList.length > 0 ? (
+                                                <div className="w-full h-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-center p-6 relative">
+                                                    <DebugOverlay index={0} name={lobbyList[0].name} weight={lobbyList[0].weight} />
+                                                    <div>
+                                                        <div className="font-bold text-xl drop-shadow-md">{lobbyList[0].name}</div>
+                                                        {lobbyList.length > 1 && <div className="mt-3 flex justify-center gap-1.5"><div className="w-2 h-2 bg-white rounded-full"></div><div className="w-2 h-2 bg-white/50 rounded-full"></div></div>}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm font-medium">目前無生效 Banner</div>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 p-4 grid grid-cols-3 gap-3 overflow-y-auto no-scrollbar">
+                                            {[1,2,3,4,5,6,7,8,9].map(i => <div key={i} className="bg-white rounded-xl shadow-sm aspect-square"></div>)}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activePreviewTab === 'promotion' && (
+                                    <div className="flex flex-col h-full bg-slate-50">
+                                        <div className="h-14 bg-white border-b border-slate-100 flex items-center px-4 font-bold text-slate-800 shadow-sm z-10">Promotions</div>
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
+                                            {promoList.length > 0 ? (
+                                                promoList.map((c, i) => (
+                                                    <div key={i} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden group relative">
+                                                        <DebugOverlay index={i} name={c.name} weight={c.weight} />
+                                                        <div className="h-32 bg-gradient-to-r from-blue-400 to-indigo-400 flex items-center justify-center text-white p-4 text-center">
+                                                            <div>
+                                                                <div className="font-bold text-lg drop-shadow">{c.name}</div>
+                                                                <div className="text-xs opacity-90 mt-1">{c.start.split(' ')[0]} ~ {c.end.split(' ')[0]}</div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="h-10 flex justify-end items-center px-4">
+                                                            <span className="text-xs font-bold text-slate-400 group-hover:text-indigo-600 transition-colors">查看詳情 &rarr;</span>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                <div className="flex flex-col items-center justify-center h-64 text-slate-400 text-sm"><div className="w-16 h-16 bg-slate-200 rounded-full mb-3"></div>目前無活動</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activePreviewTab === 'menu' && (
+                                    <div className="flex flex-col h-full bg-slate-900 text-slate-300">
+                                        <div className="p-6 pb-2">
+                                            <div className="flex items-center gap-3 mb-6">
+                                                <div className="w-12 h-12 bg-slate-700 rounded-full"></div>
+                                                <div><div className="font-bold text-white">Player01</div><div className="text-xs text-slate-500">VIP 3</div></div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                                <div className="bg-indigo-600 text-white rounded-lg p-2 text-center text-xs font-bold">Deposit</div>
+                                                <div className="bg-slate-700 text-white rounded-lg p-2 text-center text-xs font-bold">Transfer</div>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* Menu Banner Area */}
+                                        <div className="px-4 mb-4">
+                                            {menuList.length > 0 ? (
+                                                <div className="w-full h-20 bg-gradient-to-r from-purple-600 to-pink-600 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-lg border border-purple-400/30 relative overflow-hidden">
+                                                    <DebugOverlay index={0} name={menuList[0].name} weight={menuList[0].weight} />
+                                                    {menuList[0].name}
+                                                </div>
+                                            ) : (
+                                                <div className="w-full h-20 border-2 border-dashed border-slate-700 rounded-xl flex items-center justify-center text-xs text-slate-600">無 Menu Banner</div>
+                                            )}
+                                        </div>
+
+                                        {/* Simplified Menu Items */}
+                                        <div className="flex-1 overflow-y-auto px-4 pb-4">
+                                            <div className="text-[10px] text-slate-700 text-center mt-10">-- 遊戲選單區 (已簡化) --</div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activePreviewTab === 'deposit' && (
+                                    <div className="flex flex-col h-full bg-slate-50">
+                                        <div className="h-14 bg-indigo-600 flex items-center px-4 font-bold text-white shadow-md z-10">
+                                            <span className="mr-4 text-xl">&larr;</span> Deposit
+                                        </div>
+                                        <div className="p-5 space-y-6">
+                                            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                                                <div className="text-xs text-slate-400 uppercase font-bold mb-1">Current Balance</div>
+                                                <div className="text-2xl font-black text-slate-800">$ 1,024.50</div>
+                                            </div>
+
+                                            {/* Deposit Banner */}
+                                            <div className="w-full h-24 bg-slate-200 rounded-xl overflow-hidden relative group">
+                                                {depositList.length > 0 ? (
+                                                    <div className="w-full h-full bg-gradient-to-r from-orange-400 to-red-500 flex items-center justify-center text-white text-center p-2 relative">
+                                                        <DebugOverlay index={0} name={depositList[0].name} weight={depositList[0].weight} />
+                                                        <span className="font-bold drop-shadow-sm">{depositList[0].name}</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full h-full border-2 border-dashed border-slate-300 flex items-center justify-center text-slate-400 text-xs">無 Deposit Banner</div>
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <div className="font-bold text-slate-800 mb-3 text-sm">Payment Methods</div>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    {[1,2,3,4,5,6].map(i => <div key={i} className="bg-white border border-slate-200 rounded-lg aspect-[4/3] flex items-center justify-center text-xs font-bold text-slate-400">Pay</div>)}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                            </div>
+                            <div className="absolute bottom-8 text-slate-500 text-sm">* 僅預覽排程與權重邏輯，實際樣式以開發為準</div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        const App = () => {
+            const [campaigns, setCampaigns] = useState(INITIAL_CAMPAIGNS);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+            const [editItem, setEditItem] = useState(null);
+            const [toast, setToast] = useState(null);
+
+            // Filter State
+            const [filters, setFilters] = useState({
+                startDate: '',
+                endDate: '',
+                placements: PLACEMENTS, // Default: all checked
+                status: 'all'
+            });
+
+            // Handlers
+            const handleFilterChange = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
+            const handleReset = () => { 
+                setFilters({ 
+                    startDate: '', 
+                    endDate: '', 
+                    placements: PLACEMENTS, 
+                    status: 'all' 
+                }); 
+                setToast({ message: '篩選條件已重置', type: 'success' }); 
+            };
+
+            // Logic: Sort by Created (Desc) for BACKEND LIST VIEW
+            const filteredCampaigns = useMemo(() => {
+                return campaigns.filter(c => {
+                    // Status Filter
+                    if (filters.status === 'active' && !c.isEnabled) return false;
+                    if (filters.status === 'inactive' && c.isEnabled) return false;
+
+                    // Placement Filter (Check if AT LEAST ONE selected placement is active in the campaign)
+                    const isAnyPlacementActive = filters.placements.some(p => c.placements[p]?.active);
+                    if (filters.placements.length > 0 && !isAnyPlacementActive) return false;
+                    if (filters.placements.length === 0 && (c.placements.promotion.active || c.placements.lobby.active || c.placements.menu.active || c.placements.deposit.active)) return false;
+
+
+                    // Date Filter (Simple overlap check for the list view)
+                    if (filters.startDate) {
+                        const filterStart = new Date(filters.startDate).getTime();
+                        const campaignEnd = new Date(c.end).getTime();
+                        if (filterStart > campaignEnd) return false;
+                    }
+                    if (filters.endDate) {
+                        const filterEnd = new Date(filters.endDate).getTime();
+                        const campaignStart = new Date(c.start).getTime();
+                        if (filterEnd < campaignStart) return false;
+                    }
+
+                    return true;
+                }).sort((a, b) => new Date(b.created) - new Date(a.created)); // Sort by Created Time (DESC)
+            }, [campaigns, filters]);
+
+            const handleDelete = (id) => { setCampaigns(prev => prev.filter(c => c.id !== id)); setToast({ message: '活動已刪除', type: 'success' }); };
+            const handleSave = (data) => {
+                const newCreatedTime = item?.id ? item.created : new Date().toISOString();
+                if (editItem) {
+                    setCampaigns(prev => prev.map(c => c.id === editItem.id ? { ...data, id: editItem.id, created: editItem.created } : c));
+                    setToast({ message: '活動更新成功', type: 'success' });
+                } else {
+                    setCampaigns(prev => [{ ...data, id: Date.now(), isEnabled: true, created: newCreatedTime }, ...prev]);
+                    setToast({ message: '新活動建立成功', type: 'success' });
+                }
+                setIsModalOpen(false);
+            };
+            const toggleCampaignStatus = (id, currentStatus) => {
+                setCampaigns(prev => prev.map(c => c.id === id ? { ...c, isEnabled: !currentStatus } : c));
+                setToast({ message: currentStatus ? '活動已停用' : '活動已啟用', type: 'success' });
+            };
+
+            const PlacementBadges = ({ placements }) => {
+                const items = [
+                    { key: 'promotion', label: 'Promo', color: 'bg-indigo-100 text-indigo-700' },
+                    { key: 'lobby', label: 'Lobby', color: 'bg-blue-100 text-blue-700' },
+                    { key: 'menu', label: 'Menu', color: 'bg-purple-100 text-purple-700' },
+                    { key: 'deposit', label: 'Depo', color: 'bg-orange-100 text-orange-700' },
+                ];
+                return (
+                    <div className="flex gap-1.5">
+                        {items.map(p => (
+                            <span key={p.key} className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase transition-opacity ${placements[p.key]?.active ? p.color : 'bg-slate-100 text-slate-300 opacity-50'}`}>
+                                {p.label}
+                            </span>
+                        ))}
+                    </div>
+                );
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+                    <header className="bg-white border-b border-slate-200 px-8 py-5 sticky top-0 z-10 flex justify-between items-center shadow-sm">
+                        <div>
+                            <h1 className="text-xl font-bold flex items-center gap-3"><span className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-black">A</span>活動列表 (Campaign List)</h1>
+                            <p className="text-xs text-slate-500 mt-1 ml-11">統一管理所有廣告版位，一次設定，多處曝光</p>
+                        </div>
+                    </header>
+
+                    <main className="flex-1 p-8 max-w-7xl mx-auto w-full">
+                        <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-6 flex items-start gap-3">
+                            <div className="text-blue-500 mt-0.5"><Icon path={Icons.Info} /></div>
+                            <div className="text-sm text-blue-800">
+                                <p className="font-bold mb-1">版位顯示規則 (Rules)：</p>
+                                <ul className="list-disc list-inside space-y-1 text-blue-700 opacity-90">
+                                    <li><span className="font-bold">權重優先：</span>數字越小 (例: 1) 排序越前。若權重相同，則依開始時間 (越新越前)。</li>
+                                    <li><span className="bg-indigo-100 text-indigo-800 px-1 rounded font-bold mr-1">共存/輪播</span> <span className="font-bold">Promotion & Lobby</span>：依排序規則列表或輪播。</li>
+                                    <li><span className="bg-orange-100 text-orange-800 px-1 rounded font-bold mr-1">互斥/單張</span> <span className="font-bold">Menu & Deposit</span>：同一時間僅顯示排序第一 (Top 1) 的活動。</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        {/* Updated Filter Bar with Checkboxes */}
+                        <FilterBar filters={filters} onFilterChange={handleFilterChange} onReset={handleReset} onSearch={() => setToast({message: `搜尋完成，共 ${filteredCampaigns.length} 筆資料`, type: 'success'})} />
+
+                        <div className="flex justify-between items-center mb-4">
+                            <div className="text-sm text-slate-500">共 <span className="font-bold text-slate-900">{filteredCampaigns.length}</span> 筆活動</div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setIsPreviewOpen(true)} className="bg-white text-indigo-600 border border-indigo-200 hover:bg-indigo-50 px-4 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center gap-2 transition-transform active:scale-95">
+                                    <Icon path={Icons.Eye} /> 模擬預覽
+                                </button>
+                                <button onClick={() => { setEditItem(null); setIsModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold shadow-sm flex items-center gap-2 transition-transform active:scale-95">
+                                    <Icon path={Icons.Plus} /> 新增活動
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                            <table className="w-full text-left text-sm">
+                                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase tracking-wide">
+                                    <tr>
+                                        {/* Action Column moved to LEFT */}
+                                        <th className="px-6 py-4 w-24 text-center">操作</th>
+                                        <th className="px-6 py-4 w-12 text-center text-slate-400">#</th>
+                                        <th className="px-6 py-4 w-16 text-center">權重</th>
+                                        <th className="px-6 py-4">活動名稱 (Internal Name)</th>
+                                        <th className="px-6 py-4 w-64">走期 (Duration)</th>
+                                        <th className="px-6 py-4 w-64">投放版位 (Placements)</th>
+                                        <th className="px-6 py-4 w-28 text-center">狀態 (Toggle)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredCampaigns.map((c, idx) => (
+                                        <tr key={c.id} className="hover:bg-slate-50 group transition-colors">
+                                            {/* Action Buttons moved to LEFT */}
+                                            <td className="px-6 py-4 text-center">
+                                                <div className="flex justify-center gap-2">
+                                                    <button onClick={() => { setEditItem(c); setIsModalOpen(true); }} className="p-2 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-full transition-colors"><Icon path={Icons.Edit} /></button>
+                                                    <button onClick={() => handleDelete(c.id)} className="p-2 text-red-500 bg-red-50 hover:bg-red-100 rounded-full transition-colors"><Icon path={Icons.Trash} /></button>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center text-slate-400 font-mono text-xs">{idx + 1}</td>
+                                            <td className="px-6 py-4 text-center">
+                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${c.weight <= 10 ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'}`}>{c.weight}</span>
+                                            </td>
+                                            <td className="px-6 py-4 font-bold text-slate-800">{c.name}</td>
+                                            <td className="px-6 py-4"><div className="flex flex-col text-xs text-slate-600 gap-1"><span className="flex items-center gap-1.5"><Icon path={Icons.Calendar} className="w-3 h-3 text-slate-400"/> {c.start}</span><span className="flex items-center gap-1.5 text-slate-400"><span className="w-3 text-center">~</span> {c.end}</span></div></td>
+                                            <td className="px-6 py-4"><PlacementBadges placements={c.placements} /></td>
+                                            <td className="px-6 py-4 text-center"><ToggleSwitch isChecked={c.isEnabled} onChange={() => toggleCampaignStatus(c.id, c.isEnabled)} /></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </main>
+
+                    {/* Modals */}
+                    {isModalOpen && <CampaignModal item={editItem} onClose={() => setIsModalOpen(false)} onSave={handleSave} />}
+                    {isPreviewOpen && <PreviewModal isOpen={isPreviewOpen} onClose={() => setIsPreviewOpen(false)} campaigns={campaigns} />}
+                    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+                </div>
+            );
+        };
+
+        const CampaignModal = ({ item, onClose, onSave }) => {
+            const [basicInfo, setBasicInfo] = useState({
+                name: item?.name || '',
+                start: item?.start || '',
+                end: item?.end || '',
+                weight: item?.weight || 99,
+                isEnabled: item?.isEnabled ?? true
+            });
+            const [activeTab, setActiveTab] = useState('promotion');
+            const [placements, setPlacements] = useState(item?.placements || {
+                promotion: { active: true, linkType: 'url', linkValue: '' },
+                lobby: { active: false, linkType: 'url', linkValue: '' },
+                menu: { active: false, linkType: 'url', linkValue: '' },
+                deposit: { active: false, linkType: 'url', linkValue: '' }
+            });
+
+            // GAME CHECK STATE
+            const [gameCheckStatus, setGameCheckStatus] = useState('idle'); // idle, checking, valid, invalid
+            const [gameName, setGameName] = useState('');
+
+            const tabs = [
+                { id: 'promotion', label: 'Promotion 活動列表', icon: 'P', color: 'indigo' },
+                { id: 'lobby', label: 'Lobby 大廳主圖', icon: 'L', color: 'blue' },
+                { id: 'menu', label: 'Menu 選單廣告', icon: 'M', color: 'purple' },
+                { id: 'deposit', label: 'Deposit 儲值廣告', icon: 'D', color: 'orange' }
+            ];
+
+            // Helper to update placement data
+            const updatePlacement = (key, updates) => {
+                setPlacements(prev => ({
+                    ...prev,
+                    [key]: { ...prev[key], ...updates }
+                }));
+            };
+
+            // Effect to watch Game ID input changes and trigger validation
+            useEffect(() => {
+                const currentPlacement = placements[activeTab];
+                if (currentPlacement.linkType === 'game') {
+                    const id = currentPlacement.linkValue;
+                    if (id.length >= 4) {
+                        setGameCheckStatus('checking');
+                        const timer = setTimeout(() => {
+                            const foundName = MOCK_GAME_DB[id];
+                            if (foundName) {
+                                setGameCheckStatus('valid');
+                                setGameName(foundName);
+                            } else {
+                                setGameCheckStatus('invalid');
+                                setGameName('');
+                            }
+                        }, 500); // Simulate network delay
+                        return () => clearTimeout(timer);
+                    } else {
+                        setGameCheckStatus('idle');
+                        setGameName('');
+                    }
+                } else {
+                    setGameCheckStatus('idle');
+                }
+            }, [placements[activeTab].linkValue, placements[activeTab].linkType, activeTab]);
+
+            // When changing Link Type, clear value to avoid confusion
+            const handleLinkTypeChange = (newType) => {
+                updatePlacement(activeTab, { linkType: newType, linkValue: '' });
+                setGameCheckStatus('idle');
+            };
+
+            const toggleActive = () => { updatePlacement(activeTab, { active: !placements[activeTab].active }); };
+            const handleSubmit = (e) => { e.preventDefault(); if (!basicInfo.name || !basicInfo.start || !basicInfo.end) return; onSave({ ...basicInfo, placements, created: item?.created || new Date().toISOString() }); };
+
+            const currentConfig = {
+                promotion: { images: ['Wide', 'Narrow'], hint: 'Promotion 列表用 (List)' },
+                lobby: { images: ['Wide'], hint: '首頁輪播圖 (Carousel)' },
+                menu: { images: ['Wide'], hint: '側邊選單下方 (Single/Mutex)' },
+                deposit: { images: ['Wide', 'Narrow'], hint: '儲值頁面廣告 (Single/Mutex)' }
+            }[activeTab];
+            const showLinkSettings = activeTab !== 'deposit';
+
+            return (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden">
+                        <div className="bg-white border-b border-slate-100 p-6 shrink-0 z-10">
+                            <div className="flex justify-between items-start mb-6"><h2 className="text-xl font-bold text-slate-800">{item ? '編輯活動' : '新增活動'}</h2><button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button></div>
+                            <div className="grid grid-cols-12 gap-6">
+                                <div className="col-span-8">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">內部名稱 (Internal Name)</label>
+                                    <input type="text" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold" placeholder="例如：2025 新春活動" value={basicInfo.name} onChange={e => setBasicInfo({...basicInfo, name: e.target.value})} />
+                                </div>
+                                <div className="col-span-4">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">權重 (Weight, 1=Top)</label>
+                                    <input type="number" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-bold" value={basicInfo.weight} onChange={e => setBasicInfo({...basicInfo, weight: Number(e.target.value)})} />
+                                </div>
+                                <div className="col-span-6"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">開始時間</label><input type="datetime-local" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={basicInfo.start} onChange={e => setBasicInfo({...basicInfo, start: e.target.value})} /></div>
+                                <div className="col-span-6"><label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">結束時間</label><input type="datetime-local" className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" value={basicInfo.end} onChange={e => setBasicInfo({...basicInfo, end: e.target.value})} /></div>
+                            </div>
+                        </div>
+                        <div className="flex flex-1 overflow-hidden">
+                            <div className="w-64 bg-slate-50 border-r border-slate-200 p-4 flex flex-col gap-2 shrink-0 overflow-y-auto custom-scroll">
+                                <div className="text-xs font-bold text-slate-400 uppercase px-2 mb-2 tracking-wider">投放版位設定</div>
+                                {tabs.map(tab => {
+                                    const isActive = placements[tab.id]?.active;
+                                    const isSelected = activeTab === tab.id;
+                                    let activeClass = isSelected ? (tab.color === 'indigo' ? "bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200 border-l-4 border-indigo-500" : tab.color === 'blue' ? "bg-white text-blue-700 shadow-sm ring-1 ring-slate-200 border-l-4 border-blue-500" : tab.color === 'purple' ? "bg-white text-purple-700 shadow-sm ring-1 ring-slate-200 border-l-4 border-purple-500" : "bg-white text-orange-700 shadow-sm ring-1 ring-slate-200 border-l-4 border-orange-500") : "text-slate-500 hover:bg-slate-100 border-l-4 border-transparent";
+                                    return <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`w-full flex items-center justify-between p-3 rounded-r-lg transition-all text-sm font-medium group ${activeClass}`}><div className="flex items-center gap-3"><span className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold ${isActive ? `bg-${tab.color}-100 text-${tab.color}-700` : 'bg-slate-200 text-slate-400'}`}>{tab.icon}</span>{tab.label}</div>{isActive && <div className={`w-2 h-2 rounded-full bg-${tab.color}-500`}></div>}</button>;
+                                })}
+                            </div>
+                            <div className="flex-1 p-8 overflow-y-auto custom-scroll bg-white relative">
+                                <div className="flex justify-between items-center mb-8 pb-6 border-b border-slate-100">
+                                    <div><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">{tabs.find(t => t.id === activeTab).label}</h3><p className="text-xs text-slate-500 mt-1">{currentConfig.hint}</p></div>
+                                    <label className="flex items-center cursor-pointer gap-3"><span className={`text-sm font-bold ${placements[activeTab].active ? 'text-green-600' : 'text-slate-400'}`}>{placements[activeTab].active ? '此版位已開啟' : '此版位不投放'}</span><div className="relative"><input type="checkbox" className="sr-only peer" checked={placements[activeTab].active} onChange={toggleActive} /><div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div></div></label>
+                                </div>
+                                <div className={`space-y-6 transition-opacity duration-300 ${placements[activeTab].active ? 'opacity-100' : 'opacity-40 pointer-events-none grayscale'}`}>
+                                    <div><label className="block text-xs font-bold text-slate-500 uppercase mb-3">圖片素材 (English)</label><div className="flex gap-4">{currentConfig.images.map(type => (<div key={type} className="flex-1 border-2 border-dashed border-slate-300 rounded-xl h-32 flex flex-col items-center justify-center text-slate-400 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-500 cursor-pointer transition-all bg-slate-50/50"><Icon path={Icons.Image} className="w-8 h-8 mb-2" /><span className="text-xs font-bold">上傳 {type === 'Wide' ? '寬版 (Wide)' : '窄版 (Narrow)'}</span><span className="text-[10px] mt-1 opacity-60">JPG, PNG (Max 2MB)</span></div>))}</div></div>
+                                    {showLinkSettings && (
+                                        <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 fade-in">
+                                            <label className="block text-xs font-bold text-slate-500 uppercase mb-3">點擊跳轉目標 (Target)</label>
+                                            <div className="flex gap-6 mb-3 text-sm">
+                                                <label className="flex items-center gap-2 cursor-pointer group">
+                                                    <input type="radio" name="linkType" value="url" checked={placements[activeTab].linkType === 'url'} onChange={() => handleLinkTypeChange('url')} className="text-indigo-600 focus:ring-indigo-500" />
+                                                    <span className="group-hover:text-slate-800 transition-colors">外部連結 (URL)</span>
+                                                </label>
+                                                <label className="flex items-center gap-2 cursor-pointer group">
+                                                    <input type="radio" name="linkType" value="game" checked={placements[activeTab].linkType === 'game'} onChange={() => handleLinkTypeChange('game')} className="text-indigo-600 focus:ring-indigo-500" />
+                                                    <span className="group-hover:text-slate-800 transition-colors">指定遊戲 (Game ID)</span>
+                                                </label>
+                                                <label className="flex items-center gap-2 cursor-pointer group">
+                                                    <input type="radio" name="linkType" value="none" checked={placements[activeTab].linkType === 'none'} onChange={() => handleLinkTypeChange('none')} className="text-indigo-600 focus:ring-indigo-500" />
+                                                    <span className="group-hover:text-slate-800 transition-colors">不跳轉 (No Action)</span>
+                                                </label>
+                                            </div>
+                                            
+                                            {/* Input Field Logic */}
+                                            {placements[activeTab].linkType !== 'none' && (
+                                                <div className="relative fade-in">
+                                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                                        {placements[activeTab].linkType === 'game' ? <Icon path={Icons.Gamepad} className="w-4 h-4"/> : <Icon path={Icons.Link} className="w-4 h-4"/>}
+                                                    </div>
+                                                    <input 
+                                                        type="text" 
+                                                        className={`w-full border rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 outline-none transition-colors
+                                                            ${gameCheckStatus === 'valid' ? 'border-green-500 bg-green-50 focus:ring-green-500' : 
+                                                              gameCheckStatus === 'invalid' ? 'border-red-500 bg-red-50 focus:ring-red-500' : 
+                                                              'border-slate-300 focus:ring-indigo-500'}`}
+                                                        placeholder={placements[activeTab].linkType === 'url' ? 'https://...' : '例如: 1001'} 
+                                                        value={placements[activeTab].linkValue} 
+                                                        onChange={e => updatePlacement(activeTab, { linkValue: e.target.value })} 
+                                                    />
+                                                    
+                                                    {/* Validation Feedback */}
+                                                    {placements[activeTab].linkType === 'game' && (
+                                                        <div className="absolute right-3 top-2.5">
+                                                            {gameCheckStatus === 'checking' && <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>}
+                                                            {gameCheckStatus === 'valid' && <span className="text-green-500"><Icon path={Icons.Check} className="w-4 h-4"/></span>}
+                                                            {gameCheckStatus === 'invalid' && <span className="text-red-500 font-bold text-xs">!</span>}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {/* Validation Message */}
+                                            {placements[activeTab].linkType === 'game' && gameCheckStatus === 'valid' && (
+                                                <div className="mt-1.5 text-xs font-bold text-green-600 flex items-center gap-1 fade-in">
+                                                    <Icon path={Icons.Check} className="w-3 h-3"/> 檢核成功：{gameName}
+                                                </div>
+                                            )}
+                                            {placements[activeTab].linkType === 'game' && gameCheckStatus === 'invalid' && (
+                                                <div className="mt-1.5 text-xs font-bold text-red-500 flex items-center gap-1 fade-in">
+                                                    <span>⚠️</span> 查無此遊戲 ID，請確認後再輸入
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                {!placements[activeTab].active && <div className="absolute inset-0 top-32 flex items-center justify-center pointer-events-none"><div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg border border-slate-200 text-slate-500 font-bold text-sm">此版位目前設定為不投放</div></div>}
+                            </div>
+                        </div>
+                        <div className="bg-white border-t border-slate-200 p-4 shrink-0 flex justify-end gap-3 z-20"><button type="button" onClick={onClose} className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">取消</button><button type="button" onClick={handleSubmit} className="px-5 py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md transition-transform active:scale-95">確認儲存活動</button></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
